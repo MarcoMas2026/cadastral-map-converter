@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastral Map to Blueprint Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8f9ff;
+        }
+        
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8ebff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .upload-subtext {
+            color: #999;
+            font-size: 13px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            flex: 1;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            display: none;
+            font-size: 14px;
+        }
+        
+        .status.loading {
+            display: block;
+            background: #e8f4f8;
+            color: #0066cc;
+        }
+        
+        .status.success {
+            display: block;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .status.error {
+            display: block;
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+        }
+        
+        .result-image {
+            width: 100%;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+        }
+        
+        .download-buttons {
+            display: flex;
+            gap: 10px;
+            flex-direction: column;
+        }
+        
+        .btn-download {
+            padding: 12px;
+            background: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-download:hover {
+            background: #1b5e20;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 125, 50, 0.3);
+        }
+        
+        .filename {
+            color: #666;
+            font-size: 13px;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #1565c0;
+        }
+        
+        .info-box strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 22px;
+            }
+            
+            .upload-area {
+                padding: 30px 15px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ Cadastral Map Converter</h1>
+        <p class="subtitle">Transform cadastral maps into blueprint-style diagrams</p>
+        
+        <div class="info-box">
+            <strong>📌 How it works:</strong>
+            Upload a cadastral map image, and we'll automatically detect boundaries and create a blueprint-style version perfect for your landing page.
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📤</div>
+            <div class="upload-text">Click to upload or drag & drop</div>
+            <div class="upload-subtext">PNG, JPG or other image formats (max 10MB)</div>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+        
+        <div class="filename" id="filename"></div>
+        
+        <div class="button-group">
+            <button class="btn-primary" id="convertBtn" disabled>Convert to Blueprint</button>
+            <button class="btn-secondary" id="clearBtn" style="display: none;">Clear</button>
+        </div>
+        
+        <div class="status" id="status"></div>
+        
+        <div class="result" id="result">
+            <h3 style="margin-bottom: 15px; color: #333;">✅ Blueprint Generated!</h3>
+            <img id="resultImage" class="result-image" alt="Blueprint result">
+            <div class="download-buttons">
+                <a id="downloadPng" class="btn-download">⬇️ Download PNG (Blueprint)</a>
+                <a id="downloadSvg" class="btn-download" style="display: none;">⬇️ Download SVG (Vector)</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
+        const filenameDisplay = document.getElementById('filename');
+        const resultImage = document.getElementById('resultImage');
+        const downloadPng = document.getElementById('downloadPng');
+        const downloadSvg = document.getElementById('downloadSvg');
+        
+        // API endpoint (update this with your Vercel URL)
+        const API_URL = '/api/process';
+        
+        let selectedFile = null;
+
+        // File upload handlers
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            if (!file) return;
+            
+            if (file.size > 10 * 1024 * 1024) {
+                showStatus('File is too large (max 10MB)', 'error');
+                return;
+            }
+            
+            if (!file.type.startsWith('image/')) {
+                showStatus('Please select an image file', 'error');
+                return;
+            }
+            
+            selectedFile = file;
+            filenameDisplay.textContent = `Selected: ${file.name}`;
+            convertBtn.disabled = false;
+            clearBtn.style.display = 'inline-block';
+            result.classList.remove('show');
+        }
+
+        clearBtn.addEventListener('click', () => {
+            selectedFile = null;
+            fileInput.value = '';
+            filenameDisplay.textContent = '';
+            convertBtn.disabled = true;
+            clearBtn.style.display = 'none';
+            result.classList.remove('show');
+            status.style.display = 'none';
+        });
+
+        convertBtn.addEventListener('click', convertImage);
+
+        async function convertImage() {
+            if (!selectedFile) return;
+            
+            showStatus('⏳ Processing your map... This may take a moment', 'loading');
+            convertBtn.disabled = true;
+            
+            try {
+                // Convert file to base64
+                const base64 = await fileToBase64(selectedFile);
+                
+                // Call API
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        imageBase64: base64.split(',')[1]
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Display PNG result
+                    resultImage.src = `data:image/png;base64,${data.pngBase64}`;
+                    
+                    // Set download links
+                    downloadPng.href = `data:image/png;base64,${data.pngBase64}`;
+                    downloadPng.download = `${selectedFile.name.split('.')[0]}_blueprint.png`;
+                    
+                    if (data.svgBase64) {
+                        downloadSvg.href = `data:image/svg+xml;base64,${data.svgBase64}`;
+                        downloadSvg.download = `${selectedFile.name.split('.')[0]}_blueprint.svg`;
+                        downloadSvg.style.display = 'block';
+                    }
+                    
+                    result.classList.add('show');
+                    showStatus('✅ Blueprint generated successfully!', 'success');
+                } else {
+                    showStatus(`❌ Error: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                convertBtn.disabled = false;
+            }
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+    </script>
+</body>
+</html>
