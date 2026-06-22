@@ -37,18 +37,22 @@ OVERPASS_ENDPOINTS = [
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ]
 
+# Background of the whole drawing.
+BACKGROUND = '#ffffff'
+
 # Default layer styling (geometry only — designer restyles per <g> layer).
+# White background: geometry is dark navy / blue line-work, amenities keep colour.
 LAYER_STYLE = {
-    'coastline': {'stroke': '#6cb2f0', 'fill': 'none', 'width': 2},
-    'beach':     {'stroke': '#e6d75a', 'fill': 'none', 'width': 5},
-    'water':     {'stroke': '#3b6fb0', 'fill': '#0d2a52', 'width': 1},
-    'roads':     {'stroke': '#f3f9ff', 'fill': 'none', 'width': 2},
-    'paths':     {'stroke': '#90b4e0', 'fill': 'none', 'width': 1.2, 'dash': '5 5'},
-    'buildings': {'stroke': '#b4d4ff', 'fill': 'none', 'width': 1.2},
-    'pools':     {'stroke': '#7be6ff', 'fill': '#2fb6d6', 'width': 1.5},
-    'tennis':    {'stroke': '#e6883c', 'fill': 'none', 'width': 2},
-    'pitch':     {'stroke': '#7fae6b', 'fill': 'none', 'width': 2},
-    'amenities': {'stroke': '#ffd166', 'fill': '#ffd166', 'width': 1},
+    'coastline': {'stroke': '#2b6cb0', 'fill': 'none', 'width': 2},
+    'beach':     {'stroke': '#d9a521', 'fill': 'none', 'width': 5},
+    'water':     {'stroke': '#7fb2e6', 'fill': 'none', 'width': 1},
+    'roads':     {'stroke': '#102945', 'fill': 'none', 'width': 2},
+    'paths':     {'stroke': '#6b7c93', 'fill': 'none', 'width': 1.2, 'dash': '5 5'},
+    'buildings': {'stroke': '#102945', 'fill': 'none', 'width': 1.2},
+    'pools':     {'stroke': '#1a90b0', 'fill': '#34c0e0', 'width': 1.2},
+    'tennis':    {'stroke': '#e6701a', 'fill': 'none', 'width': 2},
+    'pitch':     {'stroke': '#3f9d52', 'fill': 'none', 'width': 2},
+    'amenities': {'stroke': '#c8881e', 'fill': 'none', 'width': 1.4},
 }
 
 PATH_HIGHWAYS = {'footway', 'path', 'steps', 'track', 'cycleway', 'pedestrian'}
@@ -195,7 +199,27 @@ LAYER_ORDER = ['water', 'coastline', 'beach', 'roads', 'paths',
                'buildings', 'pitch', 'tennis', 'pools', 'amenities']
 
 
+def focus_bbox(elements, s, w, n, e):
+    """Crop to the built community: the extent of buildings/pools/courts, not
+    the whole square query area (which pulls in open sea and neighbours)."""
+    lons, lats = [], []
+    for el in elements:
+        if classify(el.get('tags', {})) in ('buildings', 'pools', 'tennis', 'pitch'):
+            for g in el.get('geometry', []) or []:
+                if 'lon' in g:
+                    lons.append(g['lon']); lats.append(g['lat'])
+    if len(lons) < 2:
+        return s, w, n, e
+    fw, fe = min(lons), max(lons)
+    fs, fn = min(lats), max(lats)
+    mx = (fe - fw) * 0.08 or 1e-4
+    my = (fn - fs) * 0.08 or 1e-4
+    return fs - my, fw - mx, fn + my, fe + mx
+
+
 def build_svg(elements, s, w, n, e):
+    # Tighten the drawing window to the actual community footprint.
+    s, w, n, e = focus_bbox(elements, s, w, n, e)
     lat0 = (s + n) / 2.0
     cos0 = math.cos(math.radians(lat0)) or 1e-6
     target_w = 1600.0
@@ -238,7 +262,7 @@ def build_svg(elements, s, w, n, e):
         f'<?xml version="1.0" encoding="UTF-8"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" '
         f'width="{W:.0f}" height="{H:.0f}" font-family="sans-serif">',
-        f'<rect width="{W:.0f}" height="{H:.0f}" fill="#0b2240"/>',
+        f'<rect width="{W:.0f}" height="{H:.0f}" fill="{BACKGROUND}"/>',
     ]
     for layer in LAYER_ORDER:
         if not layers[layer]:
