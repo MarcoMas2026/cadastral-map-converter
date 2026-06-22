@@ -5,177 +5,249 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Community Blueprint Generator</title>
 <style>
-  :root { --navy:#0b2240; --navy2:#0d2a52; --ink:#1b2a3a; --line:#b4d4ff; }
+  :root { --navy:#0b2240; --ink:#102945; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Segoe UI',system-ui,sans-serif; background:#eef1f6; color:#1b2a3a; padding:24px; }
-  .wrap { max-width:1100px; margin:0 auto; }
-  h1 { font-size:24px; margin-bottom:4px; }
-  .sub { color:#667; font-size:13px; margin-bottom:20px; }
-  .card { background:#fff; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.12); padding:24px; }
-  .tabs { display:flex; gap:8px; margin-bottom:18px; }
-  .tab { padding:8px 16px; border-radius:8px; border:1px solid #d6dbe6; background:#f5f7fb; cursor:pointer; font-weight:600; font-size:14px; }
-  .tab.active { background:var(--navy); color:#fff; border-color:var(--navy); }
-  .pane { display:none; } .pane.active { display:block; }
-  label { display:block; font-size:13px; font-weight:600; margin:12px 0 6px; }
-  input[type=text], input[type=number] { width:100%; padding:11px 12px; border:1px solid #cdd4e0; border-radius:8px; font-size:14px; }
-  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
-  .row > div { flex:1; min-width:160px; }
-  .btn { padding:12px 22px; border:none; border-radius:8px; font-weight:700; font-size:14px; cursor:pointer; color:#fff;
-         background:linear-gradient(135deg,#1b4f8a,#0b2240); margin-top:16px; }
-  .btn:disabled { opacity:.55; cursor:not-allowed; }
-  .btn.ghost { background:#eef1f6; color:#1b2a3a; }
-  .status { margin-top:16px; padding:12px 14px; border-radius:8px; font-size:14px; display:none; }
-  .status.show { display:block; }
-  .status.load { background:#e8f1fb; color:#1b4f8a; }
-  .status.err { background:#fdecec; color:#b32; }
-  .status.ok { background:#eaf6ee; color:#247a3d; }
-  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
-  .chip { background:var(--navy); color:#fff; font-size:12px; padding:5px 10px; border-radius:20px; }
-  .preview { margin-top:18px; background:var(--navy); border-radius:10px; padding:10px; display:none; }
-  .preview.show { display:block; }
-  .preview svg, .preview img { width:100%; height:auto; display:block; border-radius:6px; }
-  .dl { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
-  .dl a { text-decoration:none; }
-  .hint { font-size:12px; color:#889; margin-top:6px; }
-  .upload { border:2px dashed #1b4f8a; border-radius:10px; padding:30px; text-align:center; cursor:pointer; background:#f6f9ff; }
-  input[type=file]{ display:none; }
-  .uploadhint { background:#e8f1fb; border-left:4px solid #1b4f8a; padding:12px; border-radius:6px; font-size:13px; color:#1b4f8a; }
+  body { font-family:'Segoe UI',system-ui,sans-serif; background:#eef1f6; color:#1b2a3a; padding:20px; }
+  .wrap { max-width:1280px; margin:0 auto; }
+  h1 { font-size:23px; } .sub { color:#667; font-size:13px; margin:4px 0 16px; }
+  .card { background:#fff; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,.12); padding:20px; }
+  label { font-size:13px; font-weight:600; }
+  input[type=text],input[type=number]{ padding:10px 12px; border:1px solid #cdd4e0; border-radius:8px; font-size:14px; }
+  #q { width:380px; max-width:60vw; }
+  .btn { padding:10px 18px; border:none; border-radius:8px; font-weight:700; font-size:14px; cursor:pointer; color:#fff; background:linear-gradient(135deg,#1b4f8a,#0b2240); }
+  .btn.ghost { background:#eef1f6; color:#1b2a3a; border:1px solid #d6dbe6; }
+  .btn:disabled{ opacity:.55; cursor:not-allowed; }
+  .topbar { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  .topbar > div { display:flex; flex-direction:column; gap:5px; }
+  .status { margin-top:14px; padding:11px 13px; border-radius:8px; font-size:14px; display:none; }
+  .status.show{ display:block; } .status.load{ background:#e8f1fb; color:#1b4f8a; }
+  .status.err{ background:#fdecec; color:#b32; } .status.ok{ background:#eaf6ee; color:#247a3d; }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+  .chip{ background:var(--navy); color:#fff; font-size:12px; padding:4px 10px; border-radius:20px; }
+
+  #editor{ display:none; margin-top:18px; }
+  .toolbar{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px; background:#f5f7fb; border:1px solid #e2e7f0; border-radius:10px; margin-bottom:10px; }
+  .toolbar .sep{ width:1px; height:24px; background:#d6dbe6; margin:0 4px; }
+  .toolbar small{ color:#778; font-weight:600; }
+  .amen{ display:inline-flex; align-items:center; gap:5px; padding:6px 10px; border-radius:8px; border:1px solid #d6dbe6; background:#fff; cursor:pointer; font-size:13px; font-weight:600; }
+  .amen .sw{ width:12px; height:12px; border-radius:50%; display:inline-block; border:1px solid rgba(0,0,0,.25); }
+  .amen.active{ outline:3px solid #1b4f8a55; border-color:#1b4f8a; }
+  .tool{ padding:6px 10px; border-radius:8px; border:1px solid #d6dbe6; background:#fff; cursor:pointer; font-size:13px; font-weight:600; }
+  .tool.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .stage{ position:relative; border:1px solid #dfe4ee; border-radius:10px; overflow:hidden; background:
+      repeating-conic-gradient(#f0f2f6 0% 25%, #fff 0% 50%) 50%/22px 22px; }
+  .stage img.sat{ position:absolute; top:0; left:0; transform-origin:top left; pointer-events:none; user-select:none; }
+  .stage .svghost{ position:relative; }
+  .stage .svghost svg{ width:100%; height:auto; display:block; }
+  .pin{ cursor:grab; }
+  .hint{ font-size:12px; color:#889; }
+  .range{ display:flex; align-items:center; gap:6px; font-size:12px; color:#556; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>🗺️ Community Blueprint Generator</h1>
-  <p class="sub">Turn a residential community into a clean, layered vector blueprint — buildings, roads, coastline, pools, tennis courts and beaches — ready to style.</p>
+  <p class="sub">Generate an accurate blueprint from OpenStreetMap, then drop the missing amenities exactly where they belong for a 100%-correct community map.</p>
 
   <div class="card">
-    <div class="tabs">
-      <div class="tab active" data-tab="name">By name · OpenStreetMap</div>
-      <div class="tab" data-tab="image">From image</div>
-    </div>
-
-    <!-- NAME / OSM PANE -->
-    <div class="pane active" id="pane-name">
-      <label>Community name or address</label>
-      <input type="text" id="q" placeholder="e.g. Cala Comtesa, Illetes, Calvià" value="Cala Comtesa, Illetes, Calvià">
-      <div class="row">
-        <div>
-          <label>Radius (metres)</label>
-          <input type="number" id="radius" value="350" min="100" max="2000" step="50">
-          <div class="hint">Area pulled around the location. Bump up for larger communities.</div>
-        </div>
-        <div style="flex:0 0 auto;">
-          <button class="btn" id="genBtn">Generate blueprint</button>
-        </div>
+    <div class="topbar">
+      <div>
+        <label>Community name or address</label>
+        <input type="text" id="q" value="Cala Comtesa, Illetes, Calvià">
       </div>
-      <div class="status" id="nstatus"></div>
-      <div class="chips" id="chips"></div>
-      <div class="preview" id="npreview"></div>
-      <div class="dl" id="ndl"></div>
-    </div>
-
-    <!-- IMAGE PANE -->
-    <div class="pane" id="pane-image">
-      <div class="uploadhint">Fallback for communities with poor OpenStreetMap coverage. Upload a street-map or satellite screenshot; it's segmented by colour into a navy blueprint.</div>
-      <div class="upload" id="uparea" style="margin-top:12px;">
-        <div style="font-size:40px;">📤</div>
-        <div style="font-weight:600;">Click or drop a map image</div>
-        <div class="hint" id="ufname"></div>
-        <input type="file" id="ufile" accept="image/*">
+      <div>
+        <label>Radius (m)</label>
+        <input type="number" id="radius" value="450" min="100" max="2000" step="50" style="width:90px;">
       </div>
-      <button class="btn" id="convBtn" disabled>Convert image</button>
-      <div class="status" id="istatus"></div>
-      <div class="preview" id="ipreview"></div>
-      <div class="dl" id="idl"></div>
+      <button class="btn" id="genBtn">Generate</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="chips" id="chips"></div>
+
+    <!-- EDITOR -->
+    <div id="editor">
+      <div class="toolbar">
+        <small>Add amenity:</small>
+        <span id="amenList"></span>
+        <span class="sep"></span>
+        <button class="tool active" id="toolSelect">↖ Select / Move</button>
+        <button class="tool" id="toolDelete">🗑 Delete</button>
+        <span class="sep"></span>
+        <small>Satellite guide:</small>
+        <label class="tool" style="cursor:pointer;">📷 Upload<input type="file" id="satFile" accept="image/*" hidden></label>
+        <button class="tool" id="toolPhoto">✥ Move/scale photo</button>
+        <span class="range">opacity <input type="range" id="satOpacity" min="0" max="100" value="55"></span>
+        <span class="range">scale <input type="range" id="satScale" min="20" max="300" value="100"></span>
+        <span class="sep"></span>
+        <button class="btn ghost" id="exportSvg">⬇ SVG</button>
+        <button class="btn ghost" id="exportPng">⬇ PNG</button>
+      </div>
+      <div class="hint" id="ehint">Tip: pick an amenity above, then click on the map to place it. Drag pins to move. Use “Delete” mode and click a pin to remove it.</div>
+      <div class="stage" id="stage" style="margin-top:8px;">
+        <img class="sat" id="sat" style="display:none;">
+        <div class="svghost" id="svghost"></div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
-// When the page is opened over http(s) (the live site) use relative paths.
-// When opened from file:// or an embedded preview (opaque origin), call the
-// deployed API directly — the functions send CORS '*', so this works anywhere.
-const API_BASE = /^https?:$/.test(location.protocol) ? '' : 'https://cadastral-map-converter.vercel.app';
+const PROD_HOST = 'cadastral-map-converter.vercel.app';
+const API_BASE = (location.hostname === PROD_HOST) ? '' : 'https://' + PROD_HOST;
 
-// ---- Tabs ----
-document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  document.querySelectorAll('.pane').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');
-  document.getElementById('pane-'+t.dataset.tab).classList.add('active');
+// Amenity types — colour + legend number matching the Anchorage template.
+const AMENITIES = [
+  {key:'pool',     label:'Swimming pool', color:'#34c0e0', n:1},
+  {key:'tennis',   label:'Tennis court',  color:'#e6701a', n:2},
+  {key:'beach',    label:'Beach area',    color:'#d9a521', n:3},
+  {key:'restaurant',label:'Restaurant',   color:'#c0398f', n:4},
+  {key:'clubhouse',label:'Club house',    color:'#e2552f', n:5},
+  {key:'library',  label:'Library',       color:'#3f9d52', n:6},
+  {key:'bbq',      label:'BBQ area',      color:'#b65fbf', n:7},
+  {key:'security', label:'Security gate', color:'#e23b2f', n:8},
+];
+const SVGNS='http://www.w3.org/2000/svg';
+let svg=null, customG=null, mode='select', addType=null, pinR=9;
+
+function setStatus(msg,cls){ const s=document.getElementById('status'); s.className='status show '+cls; s.textContent=msg; }
+
+// ---- build amenity palette ----
+const amenList=document.getElementById('amenList');
+AMENITIES.forEach(a=>{
+  const b=document.createElement('button'); b.className='amen'; b.dataset.key=a.key;
+  b.innerHTML=`<span class="sw" style="background:${a.color}"></span>${a.label}`;
+  b.onclick=()=>{ addType=a.key; mode='add'; refreshTools(); };
+  amenList.appendChild(b);
 });
-
-function setStatus(el, msg, cls){ el.className='status show '+cls; el.textContent=msg; }
-function svgToPngDownload(svgText, filename, link){
-  const blob = new Blob([svgText], {type:'image/svg+xml'});
-  const url = URL.createObjectURL(blob);
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas');
-    c.width = img.naturalWidth || 1600; c.height = img.naturalHeight || 1000;
-    const ctx = c.getContext('2d'); ctx.drawImage(img,0,0);
-    link.href = c.toDataURL('image/png'); link.download = filename;
-    URL.revokeObjectURL(url);
-  };
-  img.src = url;
+const toolSelect=document.getElementById('toolSelect'), toolDelete=document.getElementById('toolDelete'), toolPhoto=document.getElementById('toolPhoto');
+toolSelect.onclick=()=>{ mode='select'; addType=null; refreshTools(); };
+toolDelete.onclick=()=>{ mode='delete'; addType=null; refreshTools(); };
+toolPhoto.onclick=()=>{ mode=(mode==='photo'?'select':'photo'); addType=null; refreshTools(); };
+function refreshTools(){
+  document.querySelectorAll('.amen').forEach(x=>x.classList.toggle('active', mode==='add'&&x.dataset.key===addType));
+  toolSelect.classList.toggle('active',mode==='select');
+  toolDelete.classList.toggle('active',mode==='delete');
+  toolPhoto.classList.toggle('active',mode==='photo');
+  document.getElementById('svghost').style.pointerEvents = (mode==='photo')?'none':'auto';
+  document.getElementById('sat').style.pointerEvents = (mode==='photo')?'auto':'none';
+  const map={add:'Click on the map to place a “'+(addType||'')+'”.',select:'Drag a pin to move it.',delete:'Click a pin to delete it.',photo:'Drag the photo to align it; use the scale slider.'};
+  document.getElementById('ehint').textContent=map[mode]||'';
 }
 
-// ---- Name / OSM flow ----
-const genBtn = document.getElementById('genBtn');
-genBtn.onclick = async () => {
-  const q = document.getElementById('q').value.trim();
-  const radius = parseInt(document.getElementById('radius').value) || 350;
-  const ns = document.getElementById('nstatus'), chips=document.getElementById('chips');
-  const prev = document.getElementById('npreview'), dl=document.getElementById('ndl');
-  if(!q){ setStatus(ns,'Enter a community name or address.','err'); return; }
-  setStatus(ns,'🔎 Locating and pulling OpenStreetMap data… (can take 10–30s)','load');
-  chips.innerHTML=''; prev.classList.remove('show'); dl.innerHTML=''; genBtn.disabled=true;
+// ---- generate base ----
+document.getElementById('genBtn').onclick=async()=>{
+  const q=document.getElementById('q').value.trim();
+  const radius=parseInt(document.getElementById('radius').value)||450;
+  const chips=document.getElementById('chips');
+  if(!q){ setStatus('Enter a community name or address.','err'); return; }
+  setStatus('🔎 Locating and pulling OpenStreetMap data… (10–30s)','load'); chips.innerHTML='';
+  document.getElementById('genBtn').disabled=true;
   try{
-    const r = await fetch(API_BASE+'/api/community',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:q, radius})});
-    const d = await r.json();
-    if(!d.success){ setStatus(ns,'❌ '+d.error,'err'); return; }
-    const labels={buildings:'🏠 buildings',pools:'🏊 pools',tennis:'🎾 tennis',pitch:'⚽ pitches',
-      roads:'🛣️ roads',paths:'🚶 paths',coastline:'🌊 coastline',beach:'🏖️ beaches',
-      water:'💧 water',amenities:'📍 amenities'};
-    chips.innerHTML = Object.entries(d.counts||{}).sort((a,b)=>b[1]-a[1])
-      .map(([k,v])=>`<span class="chip">${v} ${labels[k]||k}</span>`).join('');
-    prev.innerHTML = d.svg; prev.classList.add('show');
-    const svgBlob = new Blob([d.svg],{type:'image/svg+xml'});
-    const svgUrl = URL.createObjectURL(svgBlob);
-    const base = q.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'community';
-    const pngLink = document.createElement('a'); pngLink.className='btn'; pngLink.textContent='⬇️ PNG (preview)';
-    const svgLink = document.createElement('a'); svgLink.className='btn ghost'; svgLink.textContent='⬇️ SVG (layered, for designer)';
-    svgLink.href=svgUrl; svgLink.download=base+'-blueprint.svg';
-    svgToPngDownload(d.svg, base+'-blueprint.png', pngLink);
-    dl.appendChild(svgLink); dl.appendChild(pngLink);
-    setStatus(ns,'✅ '+(d.center?('Found: '+d.center.label):'Done')+'. Each feature type is a named SVG layer.','ok');
-  }catch(e){ setStatus(ns,'❌ '+e.message,'err'); }
-  finally{ genBtn.disabled=false; }
+    const r=await fetch(API_BASE+'/api/community',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,radius})});
+    const d=await r.json();
+    if(!d.success){ setStatus('❌ '+d.error,'err'); return; }
+    const labels={buildings:'🏠 buildings',pools:'🏊 pools',tennis:'🎾 tennis',pitch:'⚽ pitches',roads:'🛣️ roads',paths:'🚶 paths',coastline:'🌊 coastline',beach:'🏖️ beaches',water:'💧 water',amenities:'📍 amenities'};
+    chips.innerHTML=Object.entries(d.counts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="chip">${v} ${labels[k]||k}</span>`).join('');
+    mountSvg(d.svg);
+    document.getElementById('editor').style.display='block';
+    setStatus('✅ '+(d.center?('Found: '+d.center.label):'Done')+'. Now add the missing amenities below.','ok');
+  }catch(e){ setStatus('❌ '+e.message,'err'); }
+  finally{ document.getElementById('genBtn').disabled=false; }
 };
 
-// ---- Image fallback flow ----
-let imgFile=null;
-const uparea=document.getElementById('uparea'), ufile=document.getElementById('ufile'),
-      convBtn=document.getElementById('convBtn');
-uparea.onclick=()=>ufile.click();
-ufile.onchange=e=>pick(e.target.files[0]);
-uparea.addEventListener('dragover',e=>e.preventDefault());
-uparea.addEventListener('drop',e=>{e.preventDefault();pick(e.dataTransfer.files[0]);});
-function pick(f){ if(!f)return; imgFile=f; document.getElementById('ufname').textContent=f.name; convBtn.disabled=false; }
-convBtn.onclick=async()=>{
-  const is=document.getElementById('istatus'),prev=document.getElementById('ipreview'),dl=document.getElementById('idl');
-  if(!imgFile)return; setStatus(is,'⏳ Converting…','load'); convBtn.disabled=true; prev.classList.remove('show'); dl.innerHTML='';
-  try{
-    const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(imgFile);});
-    const r=await fetch(API_BASE+'/api/process',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageBase64:b64.split(',')[1]})});
-    const d=await r.json();
-    if(!d.success){ setStatus(is,'❌ '+d.error,'err'); return; }
-    prev.innerHTML=`<img src="data:image/png;base64,${d.pngBase64}">`; prev.classList.add('show');
-    const a=document.createElement('a'); a.className='btn'; a.textContent='⬇️ PNG';
-    a.href=`data:image/png;base64,${d.pngBase64}`; a.download='blueprint.png'; dl.appendChild(a);
-    setStatus(is,'✅ Converted.','ok');
-  }catch(e){ setStatus(is,'❌ '+e.message,'err'); }
-  finally{ convBtn.disabled=false; }
+// ---- mount inline SVG + editing layer ----
+function mountSvg(svgText){
+  const host=document.getElementById('svghost'); host.innerHTML=svgText;
+  svg=host.querySelector('svg');
+  customG=document.createElementNS(SVGNS,'g'); customG.setAttribute('id','custom-amenities');
+  svg.appendChild(customG);
+  // transparent background in editor so the satellite shows through
+  const bg=svg.querySelector('#bp-bg'); if(bg) bg.setAttribute('fill','none');
+  // size the satellite layer to the stage
+  const sat=document.getElementById('sat');
+  sat.onload=()=>positionSat();
+  svg.addEventListener('mousedown', onSvgDown);
+  refreshTools();
+}
+function svgPoint(evt){
+  const p=svg.createSVGPoint(); p.x=evt.clientX; p.y=evt.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+function addPin(type,x,y){
+  const a=AMENITIES.find(z=>z.key===type); if(!a) return;
+  const g=document.createElementNS(SVGNS,'g'); g.setAttribute('class','pin');
+  g.setAttribute('data-type',type); g.setAttribute('transform',`translate(${x.toFixed(1)},${y.toFixed(1)})`);
+  const c=document.createElementNS(SVGNS,'circle'); c.setAttribute('r',pinR);
+  c.setAttribute('fill',a.color); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','2');
+  const t=document.createElementNS(SVGNS,'text'); t.setAttribute('text-anchor','middle');
+  t.setAttribute('dy','3.5'); t.setAttribute('font-size','9'); t.setAttribute('font-weight','700');
+  t.setAttribute('fill','#fff'); t.textContent=a.n;
+  const ttl=document.createElementNS(SVGNS,'title'); ttl.textContent=a.label;
+  g.appendChild(c); g.appendChild(t); g.appendChild(ttl); customG.appendChild(g);
+  return g;
+}
+// interactions on svg
+let drag=null;
+function onSvgDown(evt){
+  const pin=evt.target.closest('.pin');
+  if(mode==='add'&&addType){ const p=svgPoint(evt); addPin(addType,p.x,p.y); evt.preventDefault(); return; }
+  if(mode==='delete'&&pin){ pin.remove(); evt.preventDefault(); return; }
+  if(mode==='select'&&pin){
+    const p=svgPoint(evt); const m=pin.getAttribute('transform').match(/translate\(([-\d.]+),([-\d.]+)\)/);
+    drag={pin,dx:p.x-parseFloat(m[1]),dy:p.y-parseFloat(m[2])};
+    window.addEventListener('mousemove',onDragMove); window.addEventListener('mouseup',onDragUp);
+    evt.preventDefault();
+  }
+}
+function onDragMove(evt){ if(!drag)return; const p=svgPoint(evt); drag.pin.setAttribute('transform',`translate(${(p.x-drag.dx).toFixed(1)},${(p.y-drag.dy).toFixed(1)})`); }
+function onDragUp(){ drag=null; window.removeEventListener('mousemove',onDragMove); window.removeEventListener('mouseup',onDragUp); }
+
+// ---- satellite underlay ----
+let satState={x:0,y:0,scale:1};
+const satEl=document.getElementById('sat');
+document.getElementById('satFile').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return; const fr=new FileReader();
+  fr.onload=()=>{ satEl.src=fr.result; satEl.style.display='block'; satState={x:0,y:0,scale:1}; };
+  fr.readAsDataURL(f);
+};
+function positionSat(){
+  const stage=document.getElementById('stage');
+  // default: fit width
+  const base=stage.clientWidth/(satEl.naturalWidth||1);
+  satEl._fit=base; applySat();
+}
+function applySat(){
+  const base=satEl._fit||1;
+  satEl.style.opacity=document.getElementById('satOpacity').value/100;
+  satEl.style.transform=`translate(${satState.x}px,${satState.y}px) scale(${base*satState.scale})`;
+}
+document.getElementById('satOpacity').oninput=applySat;
+document.getElementById('satScale').oninput=e=>{ satState.scale=e.target.value/100; applySat(); };
+let satDrag=null;
+satEl.addEventListener('mousedown',e=>{ if(mode!=='photo')return; satDrag={x:e.clientX-satState.x,y:e.clientY-satState.y};
+  window.addEventListener('mousemove',satMove); window.addEventListener('mouseup',()=>{satDrag=null;window.removeEventListener('mousemove',satMove);},{once:true}); e.preventDefault(); });
+function satMove(e){ if(!satDrag)return; satState.x=e.clientX-satDrag.x; satState.y=e.clientY-satDrag.y; applySat(); }
+
+// ---- export ----
+function exportSvgText(){
+  const bg=svg.querySelector('#bp-bg'); const prev=bg?bg.getAttribute('fill'):null;
+  if(bg) bg.setAttribute('fill','#ffffff');           // restore white for export
+  const text=new XMLSerializer().serializeToString(svg);
+  if(bg) bg.setAttribute('fill',prev);                 // back to transparent in editor
+  return text;
+}
+function dl(href,name){ const a=document.createElement('a'); a.href=href; a.download=name; document.body.appendChild(a); a.click(); a.remove(); }
+function baseName(){ return (document.getElementById('q').value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'community'); }
+document.getElementById('exportSvg').onclick=()=>{
+  const blob=new Blob([exportSvgText()],{type:'image/svg+xml'}); dl(URL.createObjectURL(blob),baseName()+'-blueprint.svg');
+};
+document.getElementById('exportPng').onclick=()=>{
+  const txt=exportSvgText(); const img=new Image();
+  img.onload=()=>{ const vb=svg.viewBox.baseVal; const c=document.createElement('canvas');
+    c.width=vb.width||1600; c.height=vb.height||1000; const ctx=c.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height);
+    dl(c.toDataURL('image/png'),baseName()+'-blueprint.png'); };
+  img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(txt)));
 };
 </script>
 </body>

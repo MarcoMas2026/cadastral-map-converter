@@ -199,21 +199,35 @@ LAYER_ORDER = ['water', 'coastline', 'beach', 'roads', 'paths',
                'buildings', 'pitch', 'tennis', 'pools', 'amenities']
 
 
+def _pct(sorted_vals, p):
+    if not sorted_vals:
+        return None
+    k = (len(sorted_vals) - 1) * p
+    lo = int(math.floor(k)); hi = int(math.ceil(k))
+    if lo == hi:
+        return sorted_vals[lo]
+    return sorted_vals[lo] * (hi - k) + sorted_vals[hi] * (k - lo)
+
+
 def focus_bbox(elements, s, w, n, e):
-    """Crop to the built community: the extent of buildings/pools/courts, not
-    the whole square query area (which pulls in open sea and neighbours)."""
-    lons, lats = [], []
+    """Crop to the built community core. Uses building *centroids* and trims
+    outliers (a lone villa on a far islet) with percentiles so the view is the
+    community itself, not the surrounding sea / neighbours."""
+    cen_lon, cen_lat = [], []
     for el in elements:
         if classify(el.get('tags', {})) in ('buildings', 'pools', 'tennis', 'pitch'):
-            for g in el.get('geometry', []) or []:
-                if 'lon' in g:
-                    lons.append(g['lon']); lats.append(g['lat'])
-    if len(lons) < 2:
+            geom = [g for g in (el.get('geometry') or []) if 'lon' in g]
+            if not geom:
+                continue
+            cen_lon.append(sum(g['lon'] for g in geom) / len(geom))
+            cen_lat.append(sum(g['lat'] for g in geom) / len(geom))
+    if len(cen_lon) < 3:
         return s, w, n, e
-    fw, fe = min(lons), max(lons)
-    fs, fn = min(lats), max(lats)
-    mx = (fe - fw) * 0.08 or 1e-4
-    my = (fn - fs) * 0.08 or 1e-4
+    slon, slat = sorted(cen_lon), sorted(cen_lat)
+    fw, fe = _pct(slon, 0.03), _pct(slon, 0.97)
+    fs, fn = _pct(slat, 0.03), _pct(slat, 0.97)
+    mx = (fe - fw) * 0.10 or 1e-4
+    my = (fn - fs) * 0.10 or 1e-4
     return fs - my, fw - mx, fn + my, fe + mx
 
 
@@ -262,7 +276,7 @@ def build_svg(elements, s, w, n, e):
         f'<?xml version="1.0" encoding="UTF-8"?>',
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" '
         f'width="{W:.0f}" height="{H:.0f}" font-family="sans-serif">',
-        f'<rect width="{W:.0f}" height="{H:.0f}" fill="{BACKGROUND}"/>',
+        f'<rect id="bp-bg" width="{W:.0f}" height="{H:.0f}" fill="{BACKGROUND}"/>',
     ]
     for layer in LAYER_ORDER:
         if not layers[layer]:
