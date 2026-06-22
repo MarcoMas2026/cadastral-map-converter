@@ -91,6 +91,11 @@
 </div>
 
 <script>
+// When the page is opened over http(s) (the live site) use relative paths.
+// When opened from file:// or an embedded preview (opaque origin), call the
+// deployed API directly — the functions send CORS '*', so this works anywhere.
+const API_BASE = /^https?:$/.test(location.protocol) ? '' : 'https://cadastral-map-converter.vercel.app';
+
 // ---- Tabs ----
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -125,7 +130,7 @@ genBtn.onclick = async () => {
   setStatus(ns,'🔎 Locating and pulling OpenStreetMap data… (can take 10–30s)','load');
   chips.innerHTML=''; prev.classList.remove('show'); dl.innerHTML=''; genBtn.disabled=true;
   try{
-    const r = await fetch('/api/community',{method:'POST',headers:{'Content-Type':'application/json'},
+    const r = await fetch(API_BASE+'/api/community',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({query:q, radius})});
     const d = await r.json();
     if(!d.success){ setStatus(ns,'❌ '+d.error,'err'); return; }
@@ -162,7 +167,7 @@ convBtn.onclick=async()=>{
   if(!imgFile)return; setStatus(is,'⏳ Converting…','load'); convBtn.disabled=true; prev.classList.remove('show'); dl.innerHTML='';
   try{
     const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(imgFile);});
-    const r=await fetch('/api/process',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageBase64:b64.split(',')[1]})});
+    const r=await fetch(API_BASE+'/api/process',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageBase64:b64.split(',')[1]})});
     const d=await r.json();
     if(!d.success){ setStatus(is,'❌ '+d.error,'err'); return; }
     prev.innerHTML=`<img src="data:image/png;base64,${d.pngBase64}">`; prev.classList.add('show');
