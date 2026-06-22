@@ -3,6 +3,10 @@
     "api/process.py": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "api/community.py": {
+      "memory": 512,
+      "maxDuration": 60
     }
   }
 }
