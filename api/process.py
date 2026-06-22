@@ -1,13 +1,15 @@
 """
-Vercel Serverless Function - Cadastral Map to Blueprint Converter
+Vercel Serverless Function - Cadastral / Street Map to Blueprint Converter
 Path: /api/process  (file: api/process.py)
 
-Vercel's Python runtime expects a class named `handler` that subclasses
-http.server.BaseHTTPRequestHandler. Each HTTP method is implemented as
-do_GET / do_POST / do_OPTIONS.
+Vercel's Python runtime expects a class named `handler` subclassing
+http.server.BaseHTTPRequestHandler.
 
-Expected POST body (JSON):
-    { "imageBase64": "<base64-encoded-image-string>" }
+Approach: instead of naive edge detection, the input map is segmented BY COLOUR
+(water = blue, parkland = green, buildings = grey blocks, roads = near-white
+lines) and redrawn as a clean navy/white blueprint of the community.
+
+Expected POST body (JSON):  { "imageBase64": "<base64 image>" }
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -15,7 +17,6 @@ import io
 import json
 import base64
 
-import cv2
 import numpy as np
 from PIL import Image, ImageFilter
 
@@ -26,124 +27,165 @@ CORS_HEADERS = {
     'Access-Control-Allow-Headers': 'Content-Type',
 }
 
+# ---- Blueprint palette -------------------------------------------------------
+LAND_BG       = (13, 41, 75)      # deep navy (land)
+SEA           = (7, 22, 45)       # darker navy (water)
+COAST         = (120, 178, 240)   # coastline / water edge
+BUILDING_FILL = (36, 92, 158)     # building footprints
+BUILDING_EDGE = (175, 212, 255)   # building outlines
+ROAD          = (243, 249, 255)   # roads
+PARK          = (18, 52, 70)       # subtle parkland tint
+MAX_DIM       = 1600              # downscale very large uploads for speed
+
 
 class handler(BaseHTTPRequestHandler):
     def _send(self, status_code, payload):
         body = json.dumps(payload).encode('utf-8')
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
-        for key, value in CORS_HEADERS.items():
-            self.send_header(key, value)
+        for k, v in CORS_HEADERS.items():
+            self.send_header(k, v)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
         self.send_response(200)
-        for key, value in CORS_HEADERS.items():
-            self.send_header(key, value)
+        for k, v in CORS_HEADERS.items():
+            self.send_header(k, v)
         self.end_headers()
 
     def do_GET(self):
-        # Simple health check so visiting /api/process in a browser works.
         self._send(200, {'status': 'ok', 'message': 'POST an imageBase64 to convert.'})
 
     def do_POST(self):
         try:
-            content_length = int(self.headers.get('Content-Length', 0))
-            raw = self.rfile.read(content_length) if content_length else b''
+            length = int(self.headers.get('Content-Length', 0))
+            raw = self.rfile.read(length) if length else b''
             body = json.loads(raw.decode('utf-8')) if raw else {}
             image_base64 = body.get('imageBase64')
-
             if not image_base64:
                 return self._send(400, {'success': False, 'error': 'No imageBase64 provided'})
 
             try:
-                image_data = base64.b64decode(image_base64)
-                image = Image.open(io.BytesIO(image_data)).convert('RGB')
+                image = Image.open(io.BytesIO(base64.b64decode(image_base64))).convert('RGB')
             except Exception as e:
-                return self._send(400, {'success': False, 'error': f'Invalid image data: {str(e)}'})
+                return self._send(400, {'success': False, 'error': f'Invalid image data: {e}'})
 
-            png_base64, svg_base64, width, height = process_image(image)
-
+            png_b64, svg_b64, w, h = make_blueprint(image)
             return self._send(200, {
                 'success': True,
-                'pngBase64': png_base64,
-                'svgBase64': svg_base64,
+                'pngBase64': png_b64,
+                'svgBase64': svg_b64,
                 'message': 'Blueprint generated successfully',
-                'dimensions': {'width': width, 'height': height},
+                'dimensions': {'width': w, 'height': h},
             })
-
         except Exception as e:
-            return self._send(500, {
-                'success': False,
-                'error': str(e),
-                'type': type(e).__name__,
-            })
+            return self._send(500, {'success': False, 'error': str(e), 'type': type(e).__name__})
 
 
-def process_image(image):
-    """Convert a PIL RGB image into a blueprint PNG + SVG. Returns base64 strings + dims."""
-    image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-
-    # Step 1: Edge detection
-    gray = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 50, 150)
-
-    # Make lines more prominent
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    dilated = cv2.dilate(edges, kernel, iterations=1)
-
-    height, width = dilated.shape
-
-    # Step 2 & 3: blueprint background (dark blue) with white edges (vectorized)
-    blueprint_arr = np.empty((height, width, 3), dtype=np.uint8)
-    blueprint_arr[:] = (15, 50, 100)
-    blueprint_arr[dilated > 128] = (255, 255, 255)
-    blueprint = Image.fromarray(blueprint_arr, mode='RGB')
-
-    # Optional subtle glow
-    blueprint = blueprint.filter(ImageFilter.GaussianBlur(radius=0.5))
-
-    # Step 4: PNG -> base64
-    png_buffer = io.BytesIO()
-    blueprint.save(png_buffer, format='PNG')
-    png_base64 = base64.b64encode(png_buffer.getvalue()).decode('utf-8')
-
-    # Step 5: SVG -> base64
-    svg_content = create_svg_from_image(dilated, width, height)
-    svg_base64 = base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
-
-    return png_base64, svg_base64, width, height
+# ---- Morphology helpers (PIL, no OpenCV) ------------------------------------
+def _mask_img(mask):
+    return Image.fromarray((mask.astype(np.uint8) * 255), mode='L')
 
 
-def create_svg_from_image(image_array, width, height):
-    """Create a simple SVG representation of the detected edges."""
-    svg_lines = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">',
-        f'  <rect width="{width}" height="{height}" fill="#0f3264"/>',
-    ]
+def dilate(mask, size=3):
+    return np.asarray(_mask_img(mask).filter(ImageFilter.MaxFilter(size))) > 127
 
-    contours, _ = cv2.findContours(image_array, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-    for contour in contours:
-        if cv2.contourArea(contour) > 100:  # filter small noise
-            epsilon = 0.02 * cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, epsilon, True)
+def erode(mask, size=3):
+    return np.asarray(_mask_img(mask).filter(ImageFilter.MinFilter(size))) > 127
 
-            path_data = []
-            for i, point in enumerate(approx):
-                x, y = point[0]
-                path_data.append(f"{'M' if i == 0 else 'L'} {x} {y}")
-            if path_data:
-                path_data.append("Z")
-                d_attr = " ".join(path_data)
-                svg_lines.append(
-                    f'  <path d="{d_attr}" stroke="#ffffff" stroke-width="1" fill="none" '
-                    f'stroke-linecap="round" stroke-linejoin="round"/>'
-                )
 
-    svg_lines.append('</svg>')
-    return '\n'.join(svg_lines)
+def opening(mask, size=3):
+    return dilate(erode(mask, size), size)
+
+
+def closing(mask, size=3):
+    return erode(dilate(mask, size), size)
+
+
+# ---- Core pipeline -----------------------------------------------------------
+def segment(arr):
+    """Classify each pixel of an RGB int16 array into water / green / road / building."""
+    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+    mx = arr.max(2)
+    mn = arr.min(2)
+    sat = mx - mn
+    bright = arr.sum(2) // 3
+
+    water = (b - r > 16) & (b - g > 6) & (b > 165)
+    green = (g - r > 6) & (g - b > 6) & ~water
+
+    # Estimate the land background brightness (the dominant pale tone).
+    landish = (~water) & (~green) & (sat < 26) & (bright > 200)
+    bg_bright = float(np.median(bright[landish])) if landish.any() else 235.0
+
+    # Roads: near-white casing, brighter than the beige background.
+    road = (mn > 243) & (~water)
+
+    # Buildings: low-saturation grey blocks clearly darker than the background,
+    # but not as dark as text labels (which we exclude with the lower bound).
+    building = (
+        (~water) & (~green) & (~road)
+        & (sat < 24)
+        & (bright < bg_bright - 9)
+        & (bright > 120)
+    )
+    return water, green, road, building
+
+
+def make_blueprint(image):
+    # Downscale large uploads (keeps the serverless function fast & within memory).
+    if max(image.size) > MAX_DIM:
+        scale = MAX_DIM / max(image.size)
+        image = image.resize(
+            (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+            Image.LANCZOS,
+        )
+
+    arr = np.asarray(image, dtype=np.int16)
+    h, w = arr.shape[:2]
+    water, green, road, building = segment(arr)
+
+    # Clean up masks.
+    building = opening(building, 3)          # drop text specks / thin noise
+    building = closing(building, 3)          # fill small gaps inside footprints
+    road = closing(road, 3)
+    road = dilate(road, 3)                   # make road lines read clearly
+    water = closing(water, 5)
+    coast = dilate(water, 7) & ~water        # coastline band
+
+    bld_edge = building & ~erode(building, 3)
+
+    # Compose the blueprint.
+    out = np.empty((h, w, 3), dtype=np.uint8)
+    out[:] = LAND_BG
+    out[green] = PARK
+    out[water] = SEA
+    out[coast] = COAST
+    out[building] = BUILDING_FILL
+    out[bld_edge] = BUILDING_EDGE
+    out[road] = ROAD
+
+    blueprint = Image.fromarray(out, mode='RGB').filter(ImageFilter.SMOOTH)
+
+    png_buf = io.BytesIO()
+    blueprint.save(png_buf, format='PNG', optimize=True)
+    png_b64 = base64.b64encode(png_buf.getvalue()).decode('utf-8')
+
+    svg_b64 = base64.b64encode(_svg_wrap(png_b64, w, h).encode('utf-8')).decode('utf-8')
+    return png_b64, svg_b64, w, h
+
+
+def _svg_wrap(png_b64, w, h):
+    """Scalable SVG container embedding the rendered blueprint raster."""
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        f'viewBox="0 0 {w} {h}" width="{w}" height="{h}">\n'
+        f'  <image width="{w}" height="{h}" '
+        f'xlink:href="data:image/png;base64,{png_b64}"/>\n'
+        '</svg>'
+    )
