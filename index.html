@@ -150,7 +150,9 @@ document.getElementById('genBtn').onclick=async()=>{
     chips.innerHTML=Object.entries(d.counts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="chip">${v} ${labels[k]||k}</span>`).join('');
     mountSvg(d.svg);
     document.getElementById('editor').style.display='block';
-    setStatus('✅ '+(d.center?('Found: '+d.center.label):'Done')+'. Now add the missing amenities below.','ok');
+    const where = d.center ? d.center.label.split(',').slice(0,3).join(',') : 'location';
+    const clip = d.clipped ? '✅ Traced only the community (clipped to its OSM boundary). ' : '⚠️ No OSM boundary found — showing the area by radius. ';
+    setStatus(clip+'Found: '+where+'. Now add the missing amenities below.', d.clipped?'ok':'load');
   }catch(e){ setStatus('❌ '+e.message,'err'); }
   finally{ document.getElementById('genBtn').disabled=false; }
 };

@@ -53,6 +53,7 @@ LAYER_STYLE = {
     'tennis':    {'stroke': '#e6701a', 'fill': 'none', 'width': 2},
     'pitch':     {'stroke': '#3f9d52', 'fill': 'none', 'width': 2},
     'amenities': {'stroke': '#c8881e', 'fill': 'none', 'width': 1.4},
+    'boundary':  {'stroke': '#102945', 'fill': 'none', 'width': 2.5, 'dash': '10 7'},
 }
 
 PATH_HIGHWAYS = {'footway', 'path', 'steps', 'track', 'cycleway', 'pedestrian'}
@@ -85,6 +86,7 @@ class handler(BaseHTTPRequestHandler):
 
             radius = float(body.get('radius') or 350)
             center = None
+            boundary = None
 
             if body.get('bbox'):
                 s, w, n, e = [float(x) for x in body['bbox']]
@@ -96,14 +98,24 @@ class handler(BaseHTTPRequestHandler):
                     geo = geocode(body['query'])
                     if not geo:
                         return self._send(404, {'success': False, 'error': f"Could not find '{body['query']}'. Try adding town + region, or use lat/lon."})
-                    lat, lon, label = geo
+                    lat, lon, label, boundary = geo
                 else:
                     return self._send(400, {'success': False, 'error': 'Provide query, lat/lon, or bbox.'})
                 center = {'lat': lat, 'lon': lon, 'label': label}
-                s, w, n, e = bbox_from_point(lat, lon, radius)
+                # Allow opting out of boundary clipping.
+                if body.get('clip') is False:
+                    boundary = None
+                if boundary and len(boundary) >= 4:
+                    bs, bw, bn, be = ring_bbox(boundary)
+                    mlat = (bn - bs) * 0.06 or 1e-4
+                    mlon = (be - bw) * 0.06 or 1e-4
+                    s, w, n, e = bs - mlat, bw - mlon, bn + mlat, be + mlon
+                else:
+                    boundary = None
+                    s, w, n, e = bbox_from_point(lat, lon, radius)
 
             elements = overpass(s, w, n, e)
-            svg, counts = build_svg(elements, s, w, n, e)
+            svg, counts = build_svg(elements, s, w, n, e, boundary)
 
             return self._send(200, {
                 'success': True,
@@ -111,7 +123,11 @@ class handler(BaseHTTPRequestHandler):
                 'counts': counts,
                 'bbox': [s, w, n, e],
                 'center': center,
-                'message': 'Community blueprint generated from OpenStreetMap.',
+                'clipped': bool(boundary),
+                'message': ('Traced within the community boundary from OpenStreetMap.'
+                            if boundary else
+                            'No community boundary in OpenStreetMap — showing the area by radius. '
+                            'Draw a boundary in the editor to trace only the community.'),
             })
         except urllib.error.URLError as e:
             self._send(504, {'success': False, 'error': f'Upstream map service unavailable: {e}. Try again.'})
@@ -121,15 +137,51 @@ class handler(BaseHTTPRequestHandler):
 
 # ---- Geocoding (Nominatim) ---------------------------------------------------
 def geocode(query):
+    """Returns (lat, lon, label, boundary) where boundary is the community
+    outline as a list of (lon,lat) vertices if Nominatim has a polygon for it
+    (e.g. a named landuse=residential area), else None."""
     url = 'https://nominatim.openstreetmap.org/search?' + urllib.parse.urlencode(
-        {'q': query, 'format': 'json', 'limit': 1})
+        {'q': query, 'format': 'json', 'polygon_geojson': 1, 'limit': 1})
     req = urllib.request.Request(url, headers={'User-Agent': UA})
     with urllib.request.urlopen(req, timeout=20) as r:
         data = json.loads(r.read().decode('utf-8'))
     if not data:
         return None
     top = data[0]
-    return float(top['lat']), float(top['lon']), top.get('display_name', query)
+    return (float(top['lat']), float(top['lon']),
+            top.get('display_name', query), _ring_from_geojson(top.get('geojson')))
+
+
+def _ring_from_geojson(gj):
+    """Extract the largest outer ring as [(lon,lat),...] from a (Multi)Polygon."""
+    if not gj:
+        return None
+    t = gj.get('type'); c = gj.get('coordinates')
+    if t == 'Polygon':
+        return [(p[0], p[1]) for p in c[0]]
+    if t == 'MultiPolygon':
+        best = max(c, key=lambda poly: len(poly[0]))
+        return [(p[0], p[1]) for p in best[0]]
+    return None
+
+
+def ring_bbox(ring):
+    lons = [p[0] for p in ring]; lats = [p[1] for p in ring]
+    return min(lats), min(lons), max(lats), max(lons)
+
+
+def point_in_ring(lon, lat, ring):
+    """Ray-casting point-in-polygon test."""
+    inside = False
+    n = len(ring)
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i]; xj, yj = ring[j]
+        if ((yi > lat) != (yj > lat)) and \
+           (lon < (xj - xi) * (lat - yi) / ((yj - yi) or 1e-12) + xi):
+            inside = not inside
+        j = i
+    return inside
 
 
 def bbox_from_point(lat, lon, radius_m):
@@ -231,9 +283,36 @@ def focus_bbox(elements, s, w, n, e):
     return fs - my, fw - mx, fn + my, fe + mx
 
 
-def build_svg(elements, s, w, n, e):
-    # Tighten the drawing window to the actual community footprint.
-    s, w, n, e = focus_bbox(elements, s, w, n, e)
+def in_community(el, layer, ring, rbbox):
+    """Decide whether an element belongs to the bounded community."""
+    if el.get('type') == 'node' and 'lat' in el:
+        return point_in_ring(el['lon'], el['lat'], ring)
+    geom = [g for g in (el.get('geometry') or []) if 'lon' in g]
+    if not geom:
+        return False
+    if layer in ('buildings', 'pools', 'tennis', 'pitch', 'amenities'):
+        clon = sum(g['lon'] for g in geom) / len(geom)
+        clat = sum(g['lat'] for g in geom) / len(geom)
+        return point_in_ring(clon, clat, ring)
+    if layer in ('coastline', 'beach', 'water'):
+        # Keep the shoreline that sits within the framed view (coastal communities).
+        bs, bw, bn, be = rbbox
+        return any(bw <= g['lon'] <= be and bs <= g['lat'] <= bn for g in geom)
+    inside = sum(1 for g in geom if point_in_ring(g['lon'], g['lat'], ring))
+    return inside >= max(2, len(geom) * 0.35)  # roads/paths: mostly inside
+
+
+def build_svg(elements, s, w, n, e, boundary=None):
+    view_bbox = None
+    if boundary and len(boundary) >= 4:
+        bs, bw, bn, be = ring_bbox(boundary)
+        ml = (bn - bs) * 0.06 or 1e-4
+        mo = (be - bw) * 0.06 or 1e-4
+        s, w, n, e = bs - ml, bw - mo, bn + ml, be + mo
+        view_bbox = (s, w, n, e)              # frame extent, for coast/beach keep
+    else:
+        # Tighten the drawing window to the actual community footprint.
+        s, w, n, e = focus_bbox(elements, s, w, n, e)
     lat0 = (s + n) / 2.0
     cos0 = math.cos(math.radians(lat0)) or 1e-6
     target_w = 1600.0
@@ -254,6 +333,8 @@ def build_svg(elements, s, w, n, e):
     for el in elements:
         layer = classify(el.get('tags', {}))
         if not layer:
+            continue
+        if boundary and not in_community(el, layer, boundary, view_bbox):
             continue
         counts[layer] = counts.get(layer, 0) + 1
         name = (el.get('tags', {}).get('name') or '').replace('"', '')
@@ -289,6 +370,15 @@ def build_svg(elements, s, w, n, e):
             f'stroke-linecap="round"{dash}>')
         parts.extend(layers[layer])
         parts.append('</g>')
+
+    if boundary and len(boundary) >= 4:
+        pts = ' '.join(XY(lon, lat) for lon, lat in boundary)
+        st = LAYER_STYLE['boundary']
+        parts.append(
+            f'<g id="boundary" fill="none" stroke="{st["stroke"]}" '
+            f'stroke-width="{st["width"]}" stroke-dasharray="{st["dash"]}" '
+            f'stroke-linejoin="round"><polygon points="{pts}"/></g>')
+
     parts.append('</svg>')
     return '\n'.join(parts), counts
 
