@@ -64,6 +64,17 @@
     <div class="status" id="status"></div>
     <div class="chips" id="chips"></div>
 
+    <!-- PAINT BASE -->
+    <div id="paintbase" style="display:none; margin-top:14px; padding:14px; background:#f5f7fb; border:1px solid #e2e7f0; border-radius:10px;">
+      <strong>🎨 Paint base — for the watercolour illustration</strong>
+      <div class="hint" style="margin-top:4px;">Download the boundary-framed aerial, then repaint it in Midjourney / DALL·E as <em>image-to-image</em> (high image-weight / low denoise, e.g. <code>--iw 2</code>) with the prompt below. Keeps the real geography; produces a Sotogrande-style base with no pins/legend (add those after).</div>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+        <a class="btn" id="aerialBtn" target="_blank" rel="noopener">⬇ Download aerial (paint base)</a>
+        <button class="btn ghost" id="copyPrompt">⧉ Copy prompt</button>
+      </div>
+      <textarea id="promptBox" readonly style="width:100%; height:84px; margin-top:10px; font-size:12px; line-height:1.4; border:1px solid #cdd4e0; border-radius:8px; padding:10px; resize:vertical;"></textarea>
+    </div>
+
     <!-- EDITOR -->
     <div id="editor">
       <div class="toolbar">
@@ -106,6 +117,7 @@ const AMENITIES = [
   {key:'bbq',      label:'BBQ area',      color:'#b65fbf', n:7},
   {key:'security', label:'Security gate', color:'#e23b2f', n:8},
 ];
+const PAINT_PROMPT = 'Elegant hand-painted watercolour aerial illustration of this exact coastal residential community, soft muted sage greens, gentle topographic shading, delicate cream land and pale-teal sea, refined luxury real-estate master-plan style, subtle hand-drawn road lines, airy and minimal, soft paper texture, top-down oblique view, no text, no labels, no pins, no legend.';
 const SVGNS='http://www.w3.org/2000/svg';
 let svg=null, customG=null, mode='select', addType=null, pinR=9;
 
@@ -149,12 +161,23 @@ document.getElementById('genBtn').onclick=async()=>{
     const labels={buildings:'🏠 buildings',pools:'🏊 pools',tennis:'🎾 tennis',pitch:'⚽ pitches',roads:'🛣️ roads',paths:'🚶 paths',coastline:'🌊 coastline',beach:'🏖️ beaches',water:'💧 water',amenities:'📍 amenities'};
     chips.innerHTML=Object.entries(d.counts||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="chip">${v} ${labels[k]||k}</span>`).join('');
     mountSvg(d.svg);
+    // paint-base panel
+    if(d.aerialUrl){
+      document.getElementById('aerialBtn').href=d.aerialUrl;
+      document.getElementById('promptBox').value=PAINT_PROMPT;
+      document.getElementById('paintbase').style.display='block';
+    }
     document.getElementById('editor').style.display='block';
     const where = d.center ? d.center.label.split(',').slice(0,3).join(',') : 'location';
     const clip = d.clipped ? '✅ Traced only the community (clipped to its OSM boundary). ' : '⚠️ No OSM boundary found — showing the area by radius. ';
     setStatus(clip+'Found: '+where+'. Now add the missing amenities below.', d.clipped?'ok':'load');
   }catch(e){ setStatus('❌ '+e.message,'err'); }
   finally{ document.getElementById('genBtn').disabled=false; }
+};
+
+document.getElementById('copyPrompt').onclick=()=>{
+  const t=document.getElementById('promptBox'); t.select();
+  navigator.clipboard.writeText(t.value).then(()=>{ const b=document.getElementById('copyPrompt'); const o=b.textContent; b.textContent='✓ Copied'; setTimeout(()=>b.textContent=o,1500); });
 };
 
 // ---- mount inline SVG + editing layer ----

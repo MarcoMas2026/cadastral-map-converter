@@ -115,13 +115,14 @@ class handler(BaseHTTPRequestHandler):
                     s, w, n, e = bbox_from_point(lat, lon, radius)
 
             elements = overpass(s, w, n, e)
-            svg, counts = build_svg(elements, s, w, n, e, boundary)
+            svg, counts, view = build_svg(elements, s, w, n, e, boundary)
 
             return self._send(200, {
                 'success': True,
                 'svg': svg,
                 'counts': counts,
-                'bbox': [s, w, n, e],
+                'bbox': list(view),
+                'aerialUrl': aerial_url(*view),
                 'center': center,
                 'clipped': bool(boundary),
                 'message': ('Traced within the community boundary from OpenStreetMap.'
@@ -380,7 +381,21 @@ def build_svg(elements, s, w, n, e, boundary=None):
             f'stroke-linejoin="round"><polygon points="{pts}"/></g>')
 
     parts.append('</svg>')
-    return '\n'.join(parts), counts
+    return '\n'.join(parts), counts, (s, w, n, e)
+
+
+def aerial_url(s, w, n, e, width=2000):
+    """Esri World Imagery export for the framed community — the structural
+    'paint base' to repaint in a watercolour/illustrated style. (Aerial source
+    is for reference/derivative artwork; confirm licensing for production use.)"""
+    cos0 = math.cos(math.radians((s + n) / 2.0)) or 1e-6
+    width_m = (e - w) * 111320.0 * cos0
+    height_m = (n - s) * 111320.0
+    h = max(1, min(4096, round(width * height_m / width_m))) if width_m else 1500
+    qs = urllib.parse.urlencode({
+        'bbox': f'{w},{s},{e},{n}', 'bboxSR': 4326, 'imageSR': 3857,
+        'size': f'{width},{h}', 'format': 'jpg', 'f': 'image'})
+    return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?' + qs
 
 
 def escape(text):
